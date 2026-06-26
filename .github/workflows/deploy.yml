@@ -1,0 +1,74 @@
+name: Deploy to GitHub Pages
+
+# This file lets the app run directly from GitHub, with no third-party
+# hosting service required. It automatically builds and publishes the
+# app every time you push a change to the main branch.
+#
+# Setup (one-time): In your repo, go to Settings → Pages → set Source
+# to "GitHub Actions". After that, this file handles everything.
+#
+# See docs/GITHUB_MANUAL.md, Part 4.5, for the full explanation.
+
+on:
+  push:
+    branches: ['main']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: 'pages'
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Cache npm dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          # Falls back gracefully to "no cache yet" instead of failing
+          # outright if package-lock.json doesn't exist - so this keeps
+          # working the very first time, before any lock file exists.
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build the app
+        run: npm run build
+        env:
+          # GitHub Pages serves the app from a sub-path
+          # (https://USERNAME.github.io/vosto-web-app/), so Vite needs
+          # to know that base path at build time.
+          VITE_BASE_PATH: /vosto-web-app/
+
+      - name: Upload build output
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
